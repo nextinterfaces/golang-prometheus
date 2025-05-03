@@ -8,17 +8,28 @@ import (
 )
 
 // Define Prometheus metrics
-var requestCount = prometheus.NewCounterVec(
-	prometheus.CounterOpts{
-		Name: "http_requests_total",
-		Help: "Total HTTP Requests",
-	},
-	[]string{"path", "method"},
+var (
+	requestCount = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "http_requests_total",
+			Help: "Total HTTP Requests",
+		},
+		[]string{"path", "method"},
+	)
+
+	requestDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "http_request_duration_seconds",
+			Help:    "Histogram of request durations",
+			Buckets: prometheus.DefBuckets, // Default latency buckets
+		},
+		[]string{"path", "method"},
+	)
 )
 
 func init() {
-	// Register custom metrics
 	prometheus.MustRegister(requestCount)
+	prometheus.MustRegister(requestDuration)
 }
 
 func main() {
@@ -28,7 +39,11 @@ func main() {
 	router.Use(func(c *gin.Context) {
 		path := c.FullPath()
 		method := c.Request.Method
+
+		timer := prometheus.NewTimer(requestDuration.WithLabelValues(path, method))
 		c.Next()
+		timer.ObserveDuration()
+
 		requestCount.WithLabelValues(path, method).Inc()
 	})
 
